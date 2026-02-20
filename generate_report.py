@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
 Weekly Competitive Intelligence Report Generator
-Uses Anthropic Claude API for web research and analysis
+Uses Google Gemini API (FREE) for web research and analysis
 """
 
 import os
 import json
-import anthropic
+import google.generativeai as genai
 from datetime import datetime
 from pathlib import Path
 import smtplib
@@ -14,7 +14,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 # Configuration
-CLAUDE_API_KEY = os.getenv('ANTHROPIC_API_KEY')
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 GMAIL_USER = os.getenv('GMAIL_USER')
 GMAIL_APP_PASSWORD = os.getenv('GMAIL_APP_PASSWORD')
 RECIPIENT_EMAIL = os.getenv('RECIPIENT_EMAIL')
@@ -31,8 +31,11 @@ COMPETITORS = [
 ]
 
 def generate_ci_report():
-    """Call Claude API to generate competitive intelligence report"""
-    client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
+    """Call Gemini API to generate competitive intelligence report"""
+    genai.configure(api_key=GEMINI_API_KEY)
+    
+    # Use Gemini 2.0 Flash (free tier, with grounding for web search)
+    model = genai.GenerativeModel('gemini-2.0-flash-exp')
     
     prompt = """You are an elite Competitive Intelligence AI Agent specialized in the Travel and Online Travel Agency (OTA) industry. 
 
@@ -40,33 +43,36 @@ Your task is to conduct a weekly deep-dive web search to monitor, extract, and a
 
 TARGET COMPETITORS: Booking.com, Expedia, Trip.com, Trivago, Airbnb, Agoda, eDreams ODIGEO, Kayak
 
-Generate a comprehensive markdown report analyzing recent AI/ML product launches, focusing on:
-- New AI features and product launches
+Search the web for recent news, press releases, and product announcements from these competitors (focus on the past 12-18 months). Generate a comprehensive markdown report analyzing recent AI/ML product launches, focusing on:
+- New AI features and product launches (with dates)
 - UX changes and user journey impacts
 - Strategic business hypotheses behind competitor moves
 - Planning, itinerary generation, and inspiration features
 
-Use web search to find the latest information (past 12-18 months). Include links to primary sources.
+Include links to primary sources in your report.
 
 Output must be in markdown format following this structure:
+
 # Weekly AI Competitor Intelligence Report
+**Week of:** [Current Date]
+
 ## [Competitor Name]
-**New Feature:** [description]
-**UX Impact:** [impact]
-**Business Hypothesis:** [analysis]
+**New Feature:** [Brief description with launch date]
+**UX Impact:** [How does this change the user journey?]
+**Business Hypothesis:** [Strategic analysis: Why did they build this?]
 
-Include a special section on Planning & Inspiration if relevant updates are found."""
+(Repeat for each competitor with relevant updates)
 
-    message = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=8000,
-        messages=[{
-            "role": "user",
-            "content": prompt
-        }]
-    )
-    
-    return message.content[0].text
+Include a special section on Planning & Inspiration if relevant updates are found.
+
+Focus on actionable intelligence that can inform product strategy."""
+
+    try:
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        print(f"Error generating report: {e}")
+        return f"# Error Generating Report\n\nError: {str(e)}"
 
 def load_previous_report():
     """Load last week's report for delta comparison"""
@@ -159,12 +165,14 @@ def format_email_html(deltas, report_date):
             .badge {{ background: #48bb78; color: white; padding: 4px 12px; border-radius: 12px; font-size: 11px; margin-left: 10px; }}
             .badge-updated {{ background: #ed8936; }}
             .no-changes {{ text-align: center; padding: 60px; background: #f7fafc; border-radius: 8px; }}
+            .powered-by {{ margin-top: 10px; font-size: 12px; opacity: 0.8; }}
         </style>
     </head>
     <body>
         <div class="header">
             <h1>📊 Weekly AI Competitive Intelligence: Delta Report</h1>
             <p>Week of {report_date}</p>
+            <p class="powered-by">🤖 Powered by Google Gemini (FREE)</p>
         </div>
     """
     
@@ -220,6 +228,7 @@ def format_email_html(deltas, report_date):
     html += """
         <div style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #e2e8f0; text-align: center; color: #718096; font-size: 12px;">
             <p><strong>Monitored:</strong> Booking.com • Expedia • Trip.com • Trivago • Airbnb • Agoda • eDreams ODIGEO • Kayak</p>
+            <p>Powered by Google Gemini API (FREE tier)</p>
         </div>
     </body>
     </html>
@@ -230,7 +239,7 @@ def format_email_html(deltas, report_date):
 def send_email(html_content, deltas):
     """Send email via Gmail SMTP"""
     msg = MIMEMultipart('alternative')
-    msg['Subject'] = f"🔔 CI Delta Report: {len(deltas['new']) + len(deltas['updated'])} Updates"
+    msg['Subject'] = f"🔔 CI Delta Report: {len(deltas['new']) + len(deltas['updated'])} Updates (via Gemini)"
     msg['From'] = GMAIL_USER
     msg['To'] = RECIPIENT_EMAIL
     
@@ -246,9 +255,10 @@ def send_email(html_content, deltas):
 def main():
     """Main execution flow"""
     print("🚀 Starting weekly CI report generation...")
+    print("🤖 Using Google Gemini API (FREE)")
     
     # Generate new report
-    print("📊 Generating report via Claude API...")
+    print("📊 Generating report via Gemini API...")
     current_report = generate_ci_report()
     
     # Load previous report
@@ -271,7 +281,7 @@ def main():
     
     # Summary
     print(f"""
-    ✅ REPORT GENERATED SUCCESSFULLY
+    ✅ REPORT GENERATED SUCCESSFULLY (via Gemini)
     {'='*50}
     New Updates: {len(deltas['new'])}
     Updated Features: {len(deltas['updated'])}
@@ -280,6 +290,8 @@ def main():
     Report saved to: reports/latest_report.md
     Archive saved to: reports/archive/
     Email sent to: {RECIPIENT_EMAIL}
+    
+    💰 Cost this run: $0 (FREE)
     """)
 
 if __name__ == "__main__":
